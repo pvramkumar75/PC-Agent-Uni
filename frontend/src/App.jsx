@@ -9,30 +9,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const mdComponents = {
-    p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
-    strong: ({ children }) => <strong className="font-bold text-slate-900">{children}</strong>,
-    em: ({ children }) => <em className="text-slate-600 italic">{children}</em>,
-    h1: ({ children }) => <h1 className="text-xl font-bold text-slate-900 mb-3 mt-4 first:mt-0">{children}</h1>,
-    h2: ({ children }) => <h2 className="text-lg font-bold text-slate-900 mb-2 mt-4 first:mt-0">{children}</h2>,
-    h3: ({ children }) => <h3 className="text-base font-bold text-slate-800 mb-2 mt-3 first:mt-0">{children}</h3>,
-    ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>,
-    ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1.5">{children}</ol>,
-    li: ({ children }) => <li className="text-sm leading-relaxed">{children}</li>,
-    table: ({ children }) => (
-        <div className="overflow-x-auto my-4 rounded-xl border border-slate-200 shadow-sm">
-            <table className="min-w-full text-sm">{children}</table>
-        </div>
-    ),
-    thead: ({ children }) => <thead className="bg-gradient-to-r from-slate-50 to-slate-100">{children}</thead>,
-    th: ({ children }) => <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">{children}</th>,
-    td: ({ children }) => <td className="px-4 py-3 border-b border-slate-50 text-slate-700">{children}</td>,
-    code: ({ inline, children }) => inline
-        ? <code className="bg-slate-100 text-orange-700 px-1.5 py-0.5 rounded text-[13px] font-mono">{children}</code>
-        : <pre className="bg-slate-900 text-green-400 p-4 rounded-xl overflow-x-auto text-[13px] font-mono my-3 shadow-inner"><code>{children}</code></pre>,
-    blockquote: ({ children }) => <blockquote className="border-l-4 border-blue-400 pl-4 italic text-slate-600 my-3">{children}</blockquote>,
-    hr: () => <hr className="my-4 border-slate-200" />,
-};
+
 
 /* ─── COPY BUTTON ────────────────────────────────────────────────── */
 function CopyButton({ text }) {
@@ -210,6 +187,90 @@ ${analysis.summary || 'Document has been analyzed and indexed in your local memo
             textareaRef.current.style.height = 'auto';
             textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
         }
+    };
+
+    const handleOpenPath = async (path) => {
+        if (!path) return;
+        try {
+            await axios.post(`${apiUrl}/open`, { path });
+        } catch (err) {
+            console.error("Failed to open path:", err);
+        }
+    };
+
+    const isPath = (str) => {
+        if (typeof str !== 'string' || str.length < 3) return false;
+        const s = str.trim();
+        return s.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(s) || s.startsWith('\\\\');
+    };
+
+    const mdComponents = {
+        p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+        strong: ({ children }) => {
+            const content = children?.toString() || '';
+            if (isPath(content)) {
+                return (
+                    <span
+                        onClick={() => handleOpenPath(content)}
+                        className="font-bold text-blue-600 cursor-pointer hover:underline decoration-blue-400 decoration-2 underline-offset-4"
+                        title="Click to open on your computer"
+                    >
+                        {children}
+                    </span>
+                );
+            }
+            return <strong className="font-bold text-slate-900">{children}</strong>;
+        },
+        em: ({ children }) => <em className="text-slate-600 italic">{children}</em>,
+        h1: ({ children }) => <h1 className="text-xl font-bold text-slate-900 mb-3 mt-4 first:mt-0">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-lg font-bold text-slate-900 mb-2 mt-4 first:mt-0">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-base font-bold text-slate-800 mb-2 mt-3 first:mt-0">{children}</h3>,
+        ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1.5">{children}</ol>,
+        li: ({ children }) => <li className="text-sm leading-relaxed">{children}</li>,
+        table: ({ children }) => (
+            <div className="overflow-x-auto my-4 rounded-xl border border-slate-200 shadow-sm text-xs">
+                <table className="min-w-full">{children}</table>
+            </div>
+        ),
+        thead: ({ children }) => <thead className="bg-gradient-to-r from-slate-50 to-slate-100">{children}</thead>,
+        th: ({ children }) => <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">{children}</th>,
+        td: ({ children }) => {
+            const content = children?.toString() || '';
+            if (isPath(content)) {
+                return (
+                    <td className="px-4 py-3 border-b border-slate-50">
+                        <span
+                            onClick={() => handleOpenPath(content)}
+                            className="text-blue-600 font-bold cursor-pointer hover:underline"
+                            title="Click to open"
+                        >
+                            {children}
+                        </span>
+                    </td>
+                );
+            }
+            return <td className="px-4 py-3 border-b border-slate-50 text-slate-700">{children}</td>;
+        },
+        code: ({ inline, children }) => {
+            const content = children?.toString() || '';
+            if (inline && isPath(content)) {
+                return (
+                    <code
+                        onClick={() => handleOpenPath(content)}
+                        className="bg-blue-50 text-blue-700 font-bold px-1.5 py-0.5 rounded text-[12px] font-mono cursor-pointer hover:bg-blue-100 transition-colors"
+                        title="Click to open"
+                    >
+                        {children}
+                    </code>
+                );
+            }
+            return inline
+                ? <code className="bg-slate-100 text-orange-700 px-1.5 py-0.5 rounded text-[12px] font-mono">{children}</code>
+                : <pre className="bg-black text-emerald-400 p-4 rounded-xl overflow-x-auto text-[12px] font-mono my-3 shadow-inner"><code>{children}</code></pre>
+        },
+        blockquote: ({ children }) => <blockquote className="border-l-4 border-blue-400 pl-4 italic text-slate-600 my-3">{children}</blockquote>,
+        hr: () => <hr className="my-4 border-slate-200" />,
     };
 
     return (

@@ -78,6 +78,37 @@ async def get_knowledge():
     facts = memory_manager.get_learned_facts(limit=15)
     return {"facts": facts}
 
+@app.post("/open")
+async def open_file(body: Dict[str, str]):
+    """Open a file or folder on the local computer."""
+    path = body.get("path")
+    if not path:
+        return {"status": "error", "message": "No path provided"}
+    
+    # 1. Clean path
+    path = path.strip().replace('"', '').replace("'", "")
+    
+    # 2. Try several normalization variants
+    variants = [
+        path,
+        path.replace("/", "\\"),
+        path.replace("\\", "/"),
+        path.replace("/host_d/", "D:\\").replace("/", "\\"),
+        path.replace("/host_users/", "C:\\Users\\").replace("/", "\\"),
+        path.replace("D:/", "D:\\"),
+        path.replace("C:/", "C:\\"),
+    ]
+    
+    for v in variants:
+        try:
+            if os.path.exists(v):
+                os.startfile(v)
+                return {"status": "success", "message": f"Opened {v}"}
+        except:
+            continue
+            
+    return {"status": "error", "message": f"Path not found or could not be opened: {path}"}
+
 # ─── CHAT — The Versatile Brain ──────────────────────────────────────
 
 class ChatRequest(BaseModel):
@@ -114,7 +145,8 @@ You have direct line-of-sight to the following:
     - `/host_d/` → **D:/**
     - `/host_users/` → **C:/Users/**
     - `/host_capex/` → **\\tplserver\Materials**
-- Use **Bold** for file names and **Tables** for listing search results (Columns: Name, Modified, Size).
+- **CLICK-TO-OPEN**: Always provide the **Full Absolute Path** of any file or folder you mention. Format it in **Bold** (e.g., **D:/Projects/Report.pdf**). The user can click these paths to open them instantly.
+- Use **Tables** for listing search results (Columns: Name, Modified, Size, Full Path).
 - End every complex response with a "**✨ Proactive Recommendation**" section.
 
 ## GROUNDING & SAFETY
