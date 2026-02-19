@@ -29,6 +29,7 @@ function App() {
     const [apiUrl, setApiUrl] = useState(localStorage.getItem('omnimind_api_url') || 'http://localhost:8000');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isHelpOpen, setIsHelpOpen] = useState(false);
+    const [isConnected, setIsConnected] = useState(true);
     const [learnedFacts, setLearnedFacts] = useState([]);
     const [messages, setMessages] = useState([
         {
@@ -64,9 +65,19 @@ I'm your **universal operations assistant** with full, autonomous access to your
 
     useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
     useEffect(() => {
+        checkConnection();
         fetchQuotes();
         fetchLearnedFacts();
     }, [apiUrl]);
+
+    const checkConnection = async () => {
+        try {
+            await axios.get(`${apiUrl}/knowledge`, { timeout: 2000 });
+            setIsConnected(true);
+        } catch (err) {
+            setIsConnected(false);
+        }
+    };
 
     const fetchQuotes = async () => {
         try { const res = await axios.get(`${apiUrl}/quotes`); setQuotes(res.data); }
@@ -299,13 +310,85 @@ ${analysis.summary || 'Document has been analyzed and indexed in your local memo
             {/* ─── Main Chat ──────────────────────────────────────────── */}
             <div className="flex-1 flex flex-col bg-white min-w-0">
                 {/* Header */}
-                <div className="h-14 border-b border-slate-100 flex items-center px-6 shrink-0 bg-white/80 backdrop-blur-sm">
+                <div className="h-14 border-b border-slate-100 flex items-center px-6 shrink-0 bg-white/80 backdrop-blur-sm relative">
                     <div className="flex items-center gap-3">
-                        <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
+                        <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-indigo-500 animate-pulse' : 'bg-red-400'}`}></span>
                         <span className="text-sm font-semibold text-slate-700 uppercase tracking-tight">OmniMind</span>
                         <span className="text-[10px] px-2 py-0.5 bg-indigo-50 rounded-full text-indigo-400 font-bold uppercase">v3.0 Alpha</span>
                     </div>
+
+                    {!isConnected && (
+                        <div className="absolute inset-y-0 right-6 flex items-center">
+                            <motion.div
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center gap-2 px-3 py-1 bg-red-50 border border-red-100 rounded-lg"
+                            >
+                                <X size={12} className="text-red-500" />
+                                <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Local Agent Offline</span>
+                            </motion.div>
+                        </div>
+                    )}
                 </div>
+
+                {/* Connection Required Overlay */}
+                <AnimatePresence>
+                    {!isConnected && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-50 bg-white/90 backdrop-blur-md flex items-center justify-center p-6"
+                        >
+                            <div className="max-w-md w-full bg-white border border-slate-200 shadow-2xl rounded-3xl p-8 text-center">
+                                <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                    <Bot size={32} />
+                                </div>
+                                <h2 className="text-2xl font-bold text-slate-900 mb-2">Connect Your Local Agent</h2>
+                                <p className="text-sm text-slate-500 mb-8 leading-relaxed">
+                                    OmniMind is a **Local-First AI**. To use this interface with your files, you must run the local engine on your computer.
+                                </p>
+
+                                <div className="space-y-3 mb-8">
+                                    <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                                        <div className="w-8 h-8 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-xs font-bold text-slate-400">1</div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-800">Download the Engine</p>
+                                            <p className="text-[10px] text-slate-500">Clone the repo from GitHub.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                                        <div className="w-8 h-8 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-xs font-bold text-slate-400">2</div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-800">Run the Script</p>
+                                            <p className="text-[10px] text-slate-500">Run `python run_local.py` or double-click it.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3">
+                                    <a
+                                        href="https://github.com/pvramkumar75/PC-Agent-Uni"
+                                        target="_blank"
+                                        className="flex-1 bg-slate-900 text-white py-3 rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
+                                    >
+                                        Get Code (GitHub)
+                                    </a>
+                                    <button
+                                        onClick={checkConnection}
+                                        className="px-6 bg-indigo-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                                    >
+                                        Retry
+                                    </button>
+                                </div>
+
+                                <p className="mt-6 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+                                    Privacy First • All Data Stays Local
+                                </p>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Message Stream */}
                 <div className="flex-1 overflow-y-auto">
@@ -577,6 +660,26 @@ ${analysis.summary || 'Document has been analyzed and indexed in your local memo
                                             <p className="text-sm font-bold text-slate-800">Self-Learning Brain</p>
                                             <p className="text-xs text-slate-500">Automatically learns your habits and remembers where you store important files.</p>
                                         </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <LayoutDashboard size={14} className="text-blue-500" /> Sharing & Remote Access
+                                </h3>
+                                <div className="space-y-4">
+                                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                                        <p className="text-[11px] font-bold text-blue-700 mb-1">Demoing to Friends?</p>
+                                        <p className="text-[10px] text-blue-600 leading-relaxed">
+                                            To let a friend see your computer, use a tunnel like <b>ngrok</b> (run <code className="bg-blue-100 px-1 rounded">ngrok http 8000</code>). Give them the ngrok URL to put in their <b>Settings</b>.
+                                        </p>
+                                    </div>
+                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                        <p className="text-[11px] font-bold text-slate-700 mb-1">Friend wants their own Agent?</p>
+                                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                                            They should clone your GitHub repo and run <b>run_local.py</b> on their machine. The Vercel UI will then connect to their local files.
+                                        </p>
                                     </div>
                                 </div>
                             </section>
