@@ -201,7 +201,8 @@ ${analysis.summary || 'Document has been analyzed and indexed in your local memo
     const isPath = (str) => {
         if (typeof str !== 'string' || str.length < 3) return false;
         const s = str.trim();
-        return s.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(s) || s.startsWith('\\\\');
+        // Catch: D:/..., C:\..., /host_..., \\server\..., /Users/...
+        return s.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(s) || s.startsWith('\\\\') || s.includes(':/') || s.includes(':\\');
     };
 
     const mdComponents = {
