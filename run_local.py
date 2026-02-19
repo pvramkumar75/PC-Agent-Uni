@@ -35,17 +35,18 @@ def main():
     )
     
     # 5. Open the UI
-    # In a real scenario, the user would use their shared Vercel link.
-    # For now, we point to localhost:3000 as a fallback or the Vercel app.
-    ui_url = "http://localhost:3000" # Local dev
-    # ui_url = "https://your-omnimind-app.vercel.app" # Production
+    # This script will now prioritize your production Vercel link if you share it.
+    local_ui = "http://localhost:3000"
+    production_ui = "https://pc-agent-uni.vercel.app" # Replace with your actual Vercel URL
     
-    print(f"\n✨ OmniMind is ready!")
-    print(f"🔗 UI Access: {ui_url}")
-    print(f"Press Ctrl+C to stop the engine.")
+    print(f"\n✨ OmniMind Engine is LIVE!")
+    print(f"🔗 Local Access: {local_ui}")
+    print(f"🔗 Production:   {production_ui}")
+    print(f"\nPress Ctrl+C to stop the engine.")
     
     time.sleep(2)
-    webbrowser.open(ui_url)
+    # Open local by default, but production is ready
+    webbrowser.open(production_ui if production_ui != "https://pc-agent-uni.vercel.app" else local_ui)
     
     try:
         backend_proc.wait()
