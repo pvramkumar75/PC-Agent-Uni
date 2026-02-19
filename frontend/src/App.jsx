@@ -5,13 +5,10 @@ import remarkGfm from 'remark-gfm';
 import {
     Plus, Send, LayoutDashboard, MessageSquare, X, ArrowRight,
     ShieldCheck, Loader2, FileText, Sparkles, FolderOpen, Copy,
-    Check, Bot, User, Square
+    Check, Bot, User, Square, Settings as SettingsIcon, HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API_URL = 'http://localhost:8000';
-
-/* ─── MARKDOWN COMPONENTS (Claude-quality rendering) ────────────── */
 const mdComponents = {
     p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
     strong: ({ children }) => <strong className="font-bold text-slate-900">{children}</strong>,
@@ -52,6 +49,10 @@ function CopyButton({ text }) {
 
 /* ─── MAIN APP ───────────────────────────────────────────────────── */
 function App() {
+    const [apiUrl, setApiUrl] = useState(localStorage.getItem('omnimind_api_url') || 'http://localhost:8000');
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isHelpOpen, setIsHelpOpen] = useState(false);
+    const [learnedFacts, setLearnedFacts] = useState([]);
     const [messages, setMessages] = useState([
         {
             role: 'assistant',
@@ -60,16 +61,16 @@ function App() {
 I'm your **universal operations assistant** with full, autonomous access to your computer.
 
 ### My Capabilities:
-- 🔍 **Universal Search** — Locate any file across your D: drive, Desktop, or Downloads instantly.
+- 🔍 **Universal Search** — Locate any file across all your drives, Desktop, or Downloads instantly.
 - 🧠 **Document Intelligence** — Analyze invoices, reports, or legal docs (PDF, Excel, Word, OCR).
 - 📁 **Smart Cleanup** — Sort cluttered downloads, organize project folders, or tidy your desktop.
 - 📊 **Business Insight** — Specialized in procurement, price history, and vendor comparisons.
 - ⚙️ **Process Automation** — Draft emails, summarize long papers, and proactively organize your digital life.
 
 **Ask me something like:**
-> "Find all 2024 tax documents on my D drive"
+> "Find all 2024 tax documents on my computer"
 > "Tidy up my Downloads folder by grouping files by type"
-> "Summarize the latest quote from the 'capex25' folder"`
+> "Search for a 'Desktop' folder on any drive and list its contents"`
         }
     ]);
     const [input, setInput] = useState('');
@@ -85,11 +86,22 @@ I'm your **universal operations assistant** with full, autonomous access to your
     const abortControllerRef = useRef(null);
 
     useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-    useEffect(() => { fetchQuotes(); }, []);
+    useEffect(() => {
+        fetchQuotes();
+        fetchLearnedFacts();
+    }, [apiUrl]);
 
     const fetchQuotes = async () => {
-        try { const res = await axios.get(`${API_URL}/quotes`); setQuotes(res.data); }
+        try { const res = await axios.get(`${apiUrl}/quotes`); setQuotes(res.data); }
         catch (err) { console.error("Fetch error:", err); }
+    };
+
+    const fetchLearnedFacts = async () => {
+        try {
+            const res = await axios.get(`${apiUrl}/knowledge`);
+            setLearnedFacts(res.data.facts || []);
+        }
+        catch (err) { console.error("Fetch knowledge error:", err); }
     };
 
     const lastMessageRef = useRef('');
@@ -130,7 +142,7 @@ I'm your **universal operations assistant** with full, autonomous access to your
         abortControllerRef.current = new AbortController();
 
         try {
-            const res = await axios.post(`${API_URL}/chat`, {
+            const res = await axios.post(`${apiUrl}/chat`, {
                 query: currentInput,
                 history: messages.map(m => ({ role: m.role, content: m.content }))
             }, {
@@ -142,13 +154,14 @@ I'm your **universal operations assistant** with full, autonomous access to your
                 duration: res.data.duration
             }]);
             fetchQuotes();
+            fetchLearnedFacts();
         } catch (err) {
             if (axios.isCancel(err)) {
                 console.log("Request canceled");
             } else {
                 setMessages(prev => [...prev, {
                     role: 'assistant',
-                    content: `⚠️ **Connection Error**\n\nI couldn't reach the OmniMind engine. Please ensure:\n1. Docker containers are running (\`docker-compose up\`)\n2. Backend is accessible at \`${API_URL}\`\n\nError: \`${err.message}\``
+                    content: `⚠️ **Connection Error**\n\nI couldn't reach the OmniMind engine. Please ensure:\n1. The backend is running on your PC (try \`python run_local.py\`)\n2. Backend is accessible at \`${apiUrl}\`\n\nError: \`${err.message}\``
                 }]);
             }
         } finally {
@@ -168,7 +181,7 @@ I'm your **universal operations assistant** with full, autonomous access to your
         formData.append('file', file);
 
         try {
-            const res = await axios.post(`${API_URL}/upload`, formData);
+            const res = await axios.post(`${apiUrl}/upload`, formData);
             const analysis = res.data.analysis || {};
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -206,12 +219,14 @@ ${analysis.summary || 'Document has been analyzed and indexed in your local memo
                 <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200/50 mb-4">
                     <Sparkles size={20} />
                 </div>
-                <SidebarBtn icon={<MessageSquare size={18} />} active={!isDashboardOpen} onClick={() => setIsDashboardOpen(false)} label="Brain" />
-                <SidebarBtn icon={<LayoutDashboard size={18} />} active={isDashboardOpen} onClick={() => setIsDashboardOpen(true)} label="Dashboard" />
+                <SidebarBtn icon={<MessageSquare size={18} />} active={!isDashboardOpen && !isSettingsOpen && !isHelpOpen} onClick={() => { setIsDashboardOpen(false); setIsSettingsOpen(false); setIsHelpOpen(false); }} label="Brain" />
+                <SidebarBtn icon={<LayoutDashboard size={18} />} active={isDashboardOpen} onClick={() => { setIsDashboardOpen(true); setIsSettingsOpen(false); setIsHelpOpen(false); }} label="Dashboard" />
                 <SidebarBtn icon={<FolderOpen size={18} />} onClick={() => {
-                    setInput("Show me my folder structure across D drive and Desktop");
+                    setInput("Show me my folder structure across all drives and Desktop");
                     setTimeout(() => handleSendMessage(), 100);
                 }} label="Filesystem" />
+                <SidebarBtn icon={<HelpCircle size={18} />} active={isHelpOpen} onClick={() => { setIsHelpOpen(true); setIsDashboardOpen(false); setIsSettingsOpen(false); }} label="Intelligence" />
+                <SidebarBtn icon={<SettingsIcon size={18} />} active={isSettingsOpen} onClick={() => { setIsSettingsOpen(true); setIsDashboardOpen(false); setIsHelpOpen(false); }} label="Settings" />
                 <div className="mt-auto">
                     <div className="p-2 text-slate-300" title="100% Private - Air Gapped Memory">
                         <ShieldCheck size={18} />
@@ -374,7 +389,6 @@ ${analysis.summary || 'Document has been analyzed and indexed in your local memo
                         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                         className="bg-slate-50 border-l border-slate-100 flex flex-col overflow-hidden shrink-0"
                     >
-                        {/* Dashboard Header */}
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
                             <div>
                                 <h2 className="text-lg font-bold text-slate-900">Analyst Hub</h2>
@@ -388,14 +402,12 @@ ${analysis.summary || 'Document has been analyzed and indexed in your local memo
                             </button>
                         </div>
 
-                        {/* Stats */}
                         <div className="p-6 space-y-5 flex-1 overflow-y-auto">
                             <div className="grid grid-cols-2 gap-3">
                                 <StatCard label="Quotes" value={quotes.length} color="bg-white border border-slate-200" />
                                 <StatCard label="Vendors" value={[...new Set(quotes.map(q => q.vendor_name))].length} color="bg-blue-600 text-white" light />
                             </div>
 
-                            {/* Quote Cards */}
                             <div>
                                 <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Recent Quotes</h3>
                                 {quotes.length === 0 ? (
@@ -440,7 +452,6 @@ ${analysis.summary || 'Document has been analyzed and indexed in your local memo
                             </div>
                         </div>
 
-                        {/* Dashboard Footer */}
                         <div className="p-4 border-t border-slate-100 shrink-0">
                             <button
                                 onClick={() => { setInput("Generate a comparison report for all stored quotes"); setIsDashboardOpen(false); }}
@@ -448,6 +459,165 @@ ${analysis.summary || 'Document has been analyzed and indexed in your local memo
                             >
                                 Generate Report <ArrowRight size={16} />
                             </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ─── Help / Intelligence Panel ───────────────────────────── */}
+            <AnimatePresence>
+                {isHelpOpen && (
+                    <motion.div
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: 440, opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                        className="bg-slate-50 border-l border-slate-100 flex flex-col overflow-hidden shrink-0"
+                    >
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900">Intelligence Manual</h2>
+                                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-0.5">Operating Guide • v3.0</p>
+                            </div>
+                            <button onClick={() => setIsHelpOpen(false)} className="p-2 hover:bg-white rounded-xl text-slate-400 transition-all">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="p-8 space-y-8 flex-1 overflow-y-auto">
+                            <section>
+                                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">What is OmniMind?</h3>
+                                <p className="text-sm text-slate-600 leading-relaxed mb-4">
+                                    OmniMind is a <b>universal autonomous assistant</b>. Unlike standard AI, it has direct, deep access to your PC's filesystem, documents, and system tools. It runs locally for 100% privacy.
+                                </p>
+                            </section>
+
+                            <section>
+                                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">Core Utilities</h3>
+                                <div className="space-y-4">
+                                    <div className="flex gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><FolderOpen size={16} /></div>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-800">Universal File Access</p>
+                                            <p className="text-xs text-slate-500">Finds any file on C:, D:, Downloads, or Desktop without you knowing the exact path.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0"><FileText size={16} /></div>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-800">Document Intelligence</p>
+                                            <p className="text-xs text-slate-500">Reads PDF, Excel, and Images (OCR) to summarize or extract table data instantly.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0"><Sparkles size={16} /></div>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-800">Self-Learning Brain</p>
+                                            <p className="text-xs text-slate-500">Automatically learns your habits and remembers where you store important files.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Sparkles size={14} className="text-amber-400" /> Tips & Tricks
+                                </h3>
+                                <ul className="space-y-4 text-sm text-slate-600">
+                                    <li className="flex gap-3">
+                                        <ArrowRight size={14} className="mt-1 text-slate-300 shrink-0" />
+                                        <span>Use <b>"desktop"</b> or <b>"downloads"</b> to instantly jump to those folders.</span>
+                                    </li>
+                                    <li className="flex gap-3">
+                                        <ArrowRight size={14} className="mt-1 text-slate-300 shrink-0" />
+                                        <span>Say <b>"Organize it"</b> after finding a folder to automatically sort its contents.</span>
+                                    </li>
+                                    <li className="flex gap-3">
+                                        <ArrowRight size={14} className="mt-1 text-slate-300 shrink-0" />
+                                        <span>You can ask <b>"Read that quote"</b> to analyze the last file we talked about.</span>
+                                    </li>
+                                </ul>
+                            </section>
+
+                            <section>
+                                <h3 className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Learned Knowledge</h3>
+                                <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50">
+                                    {learnedFacts.length === 0 ? (
+                                        <p className="text-[11px] text-indigo-400 italic">No patterns learned yet. Start chatting to evolve my brain!</p>
+                                    ) : (
+                                        <ul className="space-y-2">
+                                            {learnedFacts.map((fact, idx) => (
+                                                <li key={idx} className="text-[11px] text-indigo-700 flex gap-2">
+                                                    <div className="w-1 h-1 bg-indigo-400 rounded-full mt-1.5 shrink-0"></div>
+                                                    {fact}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            </section>
+                        </div>
+
+                        <div className="p-6 border-t border-slate-100">
+                            <p className="text-[10px] text-center text-slate-300 font-medium tracking-widest uppercase">Autonomous PC Agent v3.0</p>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ─── Settings Panel ─────────────────────────────────────── */}
+            <AnimatePresence>
+                {isSettingsOpen && (
+                    <motion.div
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: 400, opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                        className="bg-white border-l border-slate-100 flex flex-col overflow-hidden shrink-0"
+                    >
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900">App Settings</h2>
+                                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-0.5">Configure Universal Access</p>
+                            </div>
+                            <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 transition-all">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="p-8 space-y-8 flex-1 overflow-y-auto">
+                            <section>
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Backend Engine URL</label>
+                                <div className="space-y-3">
+                                    <input
+                                        type="text"
+                                        value={apiUrl}
+                                        onChange={(e) => {
+                                            setApiUrl(e.target.value);
+                                            localStorage.setItem('omnimind_api_url', e.target.value);
+                                        }}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                        placeholder="http://localhost:8000"
+                                    />
+                                    <p className="text-[11px] text-slate-400 leading-relaxed italic">
+                                        OmniMind connects to a local engine running on your PC.
+                                        Default is <code className="bg-slate-100 px-1 rounded text-slate-600">http://localhost:8000</code>.
+                                    </p>
+                                </div>
+                            </section>
+
+                            <section className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100/50">
+                                <h4 className="text-xs font-bold text-indigo-700 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                    <ShieldCheck size={14} /> Universal Deployment
+                                </h4>
+                                <p className="text-[11px] text-indigo-600/70 leading-relaxed">
+                                    This UI is hosted on Vercel for global access. It remains 100% private by connecting directly to <b>your local computer</b> via the URL above. No data ever touches the cloud.
+                                </p>
+                            </section>
+                        </div>
+
+                        <div className="p-6 border-t border-slate-100">
+                            <p className="text-[10px] text-center text-slate-300 font-medium">OmniMind v3.0 Universal Edition</p>
                         </div>
                     </motion.div>
                 )}

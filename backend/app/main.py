@@ -6,6 +6,8 @@ import os
 import json
 import logging
 import asyncio
+import re
+import time
 
 from app.core.config import settings
 from app.core.memory import memory_manager
@@ -69,6 +71,13 @@ async def upload_file(file: UploadFile = File(...)):
         logger.error(f"Analysis error: {e}")
         return {"status": "uploaded", "file": file.filename, "analysis": {"summary": f"File saved. Analysis error: {str(e)}"}}
 
+# ─── Knowledge ───────────────────────────────────────────────────────
+@app.get("/knowledge")
+async def get_knowledge():
+    """Fetch learned patterns and facts."""
+    facts = memory_manager.get_learned_facts(limit=15)
+    return {"facts": facts}
+
 # ─── CHAT — The Versatile Brain ──────────────────────────────────────
 
 class ChatRequest(BaseModel):
@@ -105,15 +114,19 @@ You have direct line-of-sight to the following:
 - Translate container paths to human-readable ones (e.g., show "D:/Work/Quote.pdf" instead of "/host_d/Work/Quote.pdf").
 
 ## GROUNDING & SAFETY
+- **Context Memory**: You explicitly remember the files you've found, the paths you've listed, and the actions you've taken in this session. If a user says "Organize it" or "Read that file", refer to the most recent path or file discussed.
+- **Self-Learning**: You evolve over time. You should reference the "LEARNED KNOWLEDGE" section below to act on user preferences and previously discovered patterns without being asked again.
 - **Fact-Only**: If a search yields nothing, state: "I couldn't find that file or info on your computer."
 - **Confirmation**: Always ask before moving/renaming important files or sending emails.
 - **Privacy**: No deletions ever. Only safe file operations.
+
+## LEARNED KNOWLEDGE (Personal to this User)
+{learned_facts}
 """
 
 @app.post("/chat")
 async def chat_with_assistant(body: ChatRequest):
     """The main conversational endpoint — versatile like Claude."""
-    import time
     start_time = time.time()
     
     user_query = body.query
@@ -121,6 +134,12 @@ async def chat_with_assistant(body: ChatRequest):
     
     if not user_query:
         return {"reply": "Please provide a query.", "duration": 0}
+    
+    # Fetch personal knowledge to make the agent "evolve"
+    learned_knowledge = memory_manager.get_learned_facts()
+    knowledge_text = "\n".join([f"- {fact}" for fact in learned_knowledge]) if learned_knowledge else "No specialized patterns learned yet. I will evolve as we interact."
+    
+    dynamic_system_prompt = SYSTEM_PROMPT.format(learned_facts=knowledge_text)
     
     lower_q = user_query.lower()
     context_parts = []
@@ -130,8 +149,12 @@ async def chat_with_assistant(body: ChatRequest):
     # 1. FILE SEARCH
     if any(k in lower_q for k in ["find", "search", "look for", "locate", "where is", "check"]):
         search_terms = _extract_search_terms(lower_q)
-        search_root = "/host_d" if any(k in lower_q for k in ["d:", "d drive"]) else "/host_users"
-        if "desktop" in lower_q: search_root = "/host_d/OneDrive - Thermopads Pvt Ltd/Desktop"
+        search_root = None # Default to all drives
+        
+        if "desktop" in lower_q: search_root = _get_common_path("desktop")
+        elif "downloads" in lower_q: search_root = _get_common_path("downloads")
+        elif "documents" in lower_q: search_root = _get_common_path("documents")
+        elif "d:" in lower_q or "d drive" in lower_q: search_root = "D:\\"
         
         if search_terms:
             results = computer_tools.search_files(f"*{search_terms}*", search_root)
@@ -193,9 +216,9 @@ async def chat_with_assistant(body: ChatRequest):
     # ─── BUILD FINAL PROMPT ──────────────────────────────────────────
     tool_context = "\n\n".join(context_parts) if context_parts else ""
     
-    # Keep only the last 6 turns of history for context window safety
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for h in history[-6:]:
+    # Keep the last 20 turns of history to prevent conversation "collapse"
+    messages = [{"role": "system", "content": dynamic_system_prompt}]
+    for h in history[-20:]:
         messages.append({"role": h["role"], "content": h["content"]})
     
     messages.append({"role": "user", "content": f"{user_query}\n\n{tool_context}" if tool_context else user_query})
@@ -203,6 +226,20 @@ async def chat_with_assistant(body: ChatRequest):
     try:
         response = llm_engine.chat(messages)
         duration = round(time.time() - start_time, 2)
+        
+        # ─── SELF-LEARNING ENGINE (Background-ish) ───────────────────
+        # Try to extract learned facts from this interaction
+        if len(user_query) > 10:
+            learning_prompt = f"""Analyze this user request and extract any general preference, rule, or fact about their computer that I should remember.
+            
+            User: {user_query}
+            
+            Return ONLY a single sentence fact (e.g. "User prefers sorting by file type" or "User's main project folder is D:/Projects/X") or return "NONE".
+            """
+            fact = llm_engine.chat([{"role": "user", "content": learning_prompt}])
+            if fact and fact.strip().upper() != "NONE" and len(fact) < 150:
+                memory_manager.store_learned_fact("general", fact.strip())
+        
         return {"reply": response, "duration": duration}
     except Exception as e:
         logger.error(f"Chat error: {e}")
@@ -262,6 +299,42 @@ async def search_memory(q: str):
         return []
 
 # ─── Helper Functions ────────────────────────────────────────────────
+def _get_common_path(name: str) -> str:
+    """Dynamically find common folders like Desktop, Downloads across all drives."""
+    name = name.lower()
+    
+    # Standard user profile path
+    user_home = os.path.expanduser("~")
+    # Quick Check standard paths
+    if name == "desktop":
+        for p in [os.path.join(user_home, "Desktop"), os.path.join(user_home, "OneDrive", "Desktop")]:
+            if os.path.exists(p): return p
+    if name == "downloads":
+        p = os.path.join(user_home, "Downloads")
+        if os.path.exists(p): return p
+    if name == "documents":
+        for p in [os.path.join(user_home, "Documents"), os.path.join(user_home, "OneDrive", "Documents")]:
+            if os.path.exists(p): return p
+    
+    # Check for any folder starting with OneDrive (e.g. OneDrive - Company)
+    if name in ["desktop", "documents"]:
+        for d in os.listdir(user_home):
+            if d.startswith("OneDrive"):
+                od_path = os.path.join(user_home, d, name.capitalize())
+                if os.path.exists(od_path):
+                    return od_path
+
+    # Fallback: Search all drives for a folder exactly matching this name (Search is drive-agnostic)
+    found = computer_tools.find_by_name(name)
+    dirs = [f for f in found if os.path.isdir(f)]
+    if dirs:
+        # Prefer paths that look like standard user folders or roots
+        for d in dirs:
+            if "Users" in d or len(d) < 10: return d
+        return dirs[0]
+        
+    return user_home # Ultimate fallback
+
 def _extract_search_terms(query: str) -> str:
     """Extract the most likely search term from a natural language query."""
     # Remove common action words
@@ -270,7 +343,7 @@ def _extract_search_terms(query: str) -> str:
                   "please", "can", "you", "show", "me", "read", "open", "analyze", "extract",
                   "summarize", "where", "is", "are", "locate", "get", "with", "from", "about",
                   "quotes", "quotations", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
-                  "2023", "2024", "2025", "2026"]
+                  "2023", "2024", "2025", "2026", "it", "this", "that"]
     words = query.split()
     meaningful = [w for w in words if w.lower() not in stop_words and len(w) > 2]
     return " ".join(meaningful[:3]) if meaningful else ""
@@ -279,25 +352,39 @@ def _extract_path(query: str, history: List[Dict[str, str]] = None) -> str:
     """Try to extract a file path from a natural language query or history context."""
     lower = query.lower()
     
-    # 1. Direct check in current query
-    if "capex25" in lower: return "/host_capex/2025"
-    if "desktop" in lower: return "/host_d/OneDrive - Thermopads Pvt Ltd/Desktop"
-    if "downloads" in lower or "download" in lower: return "/host_users/Ramkumar/Downloads"
-    if "documents" in lower or "document" in lower: return "/host_d/OneDrive - Thermopads Pvt Ltd/Documents"
+    # 0. Check for "it", "this", "that", "the folder"
+    is_referential = any(k in lower for k in ["it", "this", "that", "the folder", "the directory"])
+    
+    # 1. Check for well-known folders in CURRENT query
+    for folder in ["desktop", "downloads", "documents"]:
+        if folder in lower:
+            return _get_common_path(folder)
+    
+    # 2. Direct check in current query
     if "rfq" in lower: return settings.RFQ_DIR
     if "inbox" in lower: return settings.INBOX_DIR
     if "orders" in lower: return settings.ORDERS_DIR
-    if "workspace" in lower: return "/workspace"
-    if "d:" in lower or "d drive" in lower: return "/host_d"
+    if "workspace" in lower: return settings.WORKSPACE_ROOT
+    if "d:" in lower or "d drive" in lower: return "D:\\"
+    if "c:" in lower or "c drive" in lower: return "C:\\"
     
-    # 2. Check history if current query is a short confirmation (Yes/No/Proceed)
-    if history and any(k in lower for k in ["yes", "proceed", "do it", "confirm", "ok", "go ahead"]):
+    # 3. If referential or confirmation, look deep into history
+    if is_referential or (history and any(k in lower for k in ["yes", "proceed", "do it", "confirm", "ok", "go ahead"])):
         # Search backwards through history for the last mentioned path
         for msg in reversed(history):
-            h_lower = msg["content"].lower()
-            if "desktop" in h_lower: return "/host_d/OneDrive - Thermopads Pvt Ltd/Desktop"
-            if "downloads" in h_lower: return "/host_users/Ramkumar/Downloads"
-            if "documents" in h_lower: return "/host_d/OneDrive - Thermopads Pvt Ltd/Documents"
-            if "d drive" in h_lower or "d:" in h_lower: return "/host_d"
+            h_content = msg["content"].lower()
+            # Look for explicit paths in history content
+            import re
+            # Match Windows-style paths D:\... or /host_...
+            paths = re.findall(r'[a-zA-Z]:\\[^ \n\r\t]+', h_content)
+            if paths: return paths[0]
             
-    return "/host_d" # Default to D drive as it's likely the main storage
+            # Look for folder names
+            for folder in ["desktop", "downloads", "documents"]:
+                if folder in h_content:
+                    return _get_common_path(folder)
+            
+            if "d drive" in h_content or "d:" in h_content: return "D:\\"
+            if "workspace" in h_content: return settings.WORKSPACE_ROOT
+            
+    return os.path.expanduser("~") # Default to User Home

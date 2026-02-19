@@ -1,102 +1,47 @@
-# ProcureAI — Setup Guide (For New Users)
+# OmniMind — Setup Guide (For New Users)
 
-## What is ProcureAI?
-A local AI-powered procurement assistant that can:
-- Search your entire computer for files
-- Analyze quotations, invoices, and purchase orders
-- Compare vendors and track price history
-- Organize folders and draft emails
-
-Everything runs **on your machine** — your files never leave your laptop.
+## What is OmniMind?
+A personal AI assistant that runs **on your machine**. When you use the shared link, it connects to your own PC to help you search files, analyze documents, and stay organized.
 
 ---
 
-## Step 1: Install Docker Desktop
-
-1. Go to: https://www.docker.com/products/docker-desktop/
-2. Download **Docker Desktop for Windows**
-3. Install it (follow the wizard — accept all defaults)
-4. **Restart your computer** when prompted
-5. Open Docker Desktop and wait until it says **"Docker Desktop is running"**
-
-> ⚠️ If you see "WSL 2 installation is incomplete", follow the link Docker provides to install the WSL 2 kernel update.
-
----
-
-## Step 2: Get a DeepSeek API Key (Free)
-
-1. Go to: https://platform.deepseek.com/
-2. Create a free account
-3. Go to **API Keys** → Create a new key
-4. Copy the key (starts with `sk-...`)
-
----
-
-## Step 3: Set Up the App
-
-1. Copy the entire **"Purchase Agent"** folder to your computer (e.g., `D:\Purchase Agent\`)
-
-2. Open the `.env` file in the folder with Notepad and replace the API key:
+## Step 1: Get Your API Key
+1. Go to: [https://platform.deepseek.com/](https://platform.deepseek.com/)
+2. Create an account and get an **API Key**.
+3. Create a file named `.env` in this folder and add:
    ```
-   DEEPSEEK_API_KEY=sk-YOUR_KEY_HERE
-   ```
-   Save and close.
-
-3. (Optional) If you want email features, add your Gmail credentials:
-   ```
-   GMAIL_USER=your.email@gmail.com
-   GMAIL_APP_PASSWORD=your_app_password
+   DEEPSEEK_API_KEY=sk-xxxx...
    ```
 
----
+## Step 2: Run the Engine
+You need to run the "brain" of the app on your computer so it can see your files.
 
-## Step 4: Run the App
+**Option A (No Installation)**
+1. Ensure you have [Python](https://www.python.org/) installed.
+2. Double-click `run_local.py`.
+3. It will install everything and start automatically.
 
-**Option A — Double-click (Easy)**
-- Double-click `start-app.bat`
-- Wait ~30 seconds for first-time setup
-- Your browser will open automatically to http://localhost:3000
-
-**Option B — Command Line**
-- Open Terminal/PowerShell in the folder
-- Run: `docker-compose up --build`
-- Open http://localhost:3000 in your browser
+**Option B (Docker)**
+1. Open Docker Desktop.
+2. Run `docker-compose up`.
 
 ---
 
-## Step 5: Stop the App
-
-- Double-click `stop-app.bat`
-- Or run `docker-compose down` in the terminal
-
----
-
-## Daily Usage
-
-| Action | How |
-|--------|-----|
-| **Start** | Double-click `start-app.bat` |
-| **Stop** | Double-click `stop-app.bat` |
-| **Use** | Open http://localhost:3000 |
-
-Your data (quotes, vendor history) is saved in the `memory/` folder and persists between restarts.
+## Step 3: Use the Universal Link
+Once your engine is running:
+1. Open the shared link (e.g., `https://omnimind-ui.vercel.app`).
+2. Go to **Settings** (Gear icon in sidebar).
+3. Ensure the URL is `http://localhost:8000`.
+4. ✨ **Start chatting!**
 
 ---
 
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| "Docker is not running" | Open Docker Desktop and wait for it to start |
-| "Port 3000 is in use" | Close any other app using port 3000, or change the port in `docker-compose.yml` |
-| First run is slow | Normal! Docker downloads ~2GB of base images on first run. Subsequent starts are instant. |
-| API errors | Check your DeepSeek API key in `.env` and ensure you have credits |
+## 🔍 Smart Features for You
+- **"Check my Desktop"**: It automatically finds your Desktop on any drive (C:, D:, etc.).
+- **"Organize Downloads"**: It will sort your files into neat folders.
+- **"Analyze Quote"**: Summarizes any PDF or Excel quotation.
 
 ---
 
-## Important Notes for Your Friend
-
-1. **The `.env` file contains YOUR API key** — your friend needs their OWN DeepSeek key
-2. **The `memory/` folder** contains your procurement data — don't share it unless intended
-3. **First run takes 2-5 minutes** as Docker builds the containers. After that, starts take ~10 seconds
-4. **Disk access**: The app can read files on D: drive and the user's Desktop/Documents/Downloads
+## Important Security Note
+**Your files NEVER leave your computer.** The shared link is just a "Remote Control". All the heavy lifting and data storage happens locally on your machine.

@@ -11,12 +11,54 @@ logger = logging.getLogger(__name__)
 class ComputerTools:
     """Full-featured computer interaction tools for file search, organization, and reading."""
 
+    @staticmethod
+    def get_all_drives() -> List[str]:
+        """Detect all available drives on Windows or return root on Linux."""
+        import platform
+        if platform.system() == "Windows":
+            import string
+            from ctypes import windll
+            drives = []
+            bitmask = windll.kernel32.GetLogicalDrives()
+            for letter in string.ascii_uppercase:
+                if bitmask & 1:
+                    drives.append(f"{letter}:\\")
+                bitmask >>= 1
+            return drives
+        return ["/"]
+
+    @staticmethod
+    def get_universal_roots() -> List[str]:
+        """Get standard root directories like User folders and all drives."""
+        roots = []
+        # 1. User profile folders
+        user_profile = os.path.expanduser("~")
+        roots.append(user_profile)
+        
+        # 2. All logical drives
+        try:
+            roots.extend(ComputerTools.get_all_drives())
+        except:
+            pass
+        
+        # 3. Specific workspace if present
+        if os.path.exists("/workspace"): roots.append("/workspace")
+        
+        # Clean and return unique existing directories
+        valid_roots = []
+        for r in set(roots):
+            if os.path.isdir(r):
+                valid_roots.append(r)
+        return valid_roots
+
     # ─── SEARCH & DISCOVER ─────────────────────────────────────────────
 
     @staticmethod
     def list_directory(path: str, max_items: int = 50) -> Dict[str, Any]:
         """List contents of a directory with file metadata."""
         try:
+            # Handle user path expansion (e.g. ~)
+            path = os.path.expanduser(path)
             if not os.path.isdir(path):
                 return {"error": f"Not a directory: {path}"}
             
@@ -43,8 +85,18 @@ class ComputerTools:
             return {"error": str(e)}
 
     @staticmethod
-    def search_files(pattern: str, root_dir: str = "/host_d", max_results: int = 25) -> List[Dict[str, str]]:
+    def search_files(pattern: str, root_dir: str = None, max_results: int = 25) -> List[Dict[str, str]]:
         """Search for files matching a pattern using os.walk for better control."""
+        if root_dir is None:
+            # Default to scanning all drives if no root is provided
+            roots = ComputerTools.get_universal_roots()
+            results = []
+            for r in roots:
+                results.extend(ComputerTools.search_files(pattern, r, max_results - len(results)))
+                if len(results) >= max_results:
+                    break
+            return results
+
         results = []
         pattern_lower = pattern.replace("*", "").lower()
         
@@ -77,14 +129,14 @@ class ComputerTools:
                             return results
             return results
         except Exception as e:
-            logger.error(f"Search error: {e}")
+            logger.error(f"Search error in {root_dir}: {e}")
             return [{"error": str(e)}]
 
     @staticmethod
     def find_by_name(name_fragment: str, root_dirs: List[str] = None) -> List[str]:
-        """Find files containing a name fragment across multiple root directories."""
+        """Find files or folders containing a name fragment across multiple root directories."""
         if root_dirs is None:
-            root_dirs = ["/host_users", "/host_d", "/workspace"]
+            root_dirs = ComputerTools.get_universal_roots()
         
         found = []
         for root in root_dirs:
@@ -94,11 +146,18 @@ class ComputerTools:
                 for dirpath, dirnames, filenames in os.walk(root):
                     # Skip hidden and system directories
                     dirnames[:] = [d for d in dirnames if not d.startswith('.') and d not in ['node_modules', '__pycache__', '.git', 'AppData', '$Recycle.Bin']]
+                    
+                    # Check files
                     for fname in filenames:
                         if name_fragment.lower() in fname.lower():
                             found.append(os.path.join(dirpath, fname))
-                            if len(found) >= 20:
-                                return found
+                            if len(found) >= 20: return found
+                    
+                    # Check directories (new: for finding "Desktop" etc)
+                    for dname in dirnames:
+                        if name_fragment.lower() == dname.lower():
+                            found.append(os.path.join(dirpath, dname))
+                            if len(found) >= 20: return found
             except:
                 continue
         return found

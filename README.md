@@ -1,20 +1,31 @@
-# ProcureAI — Autonomous Procurement Assistant
+# OmniMind — Universal AI Personal Assistant
 
-A **Claude-like** AI assistant for procurement operations. Powered by DeepSeek, running fully local with full disk access to your computer.
+A **powerful, private** AI assistant that lives on your computer. Host the UI on Vercel and control your PC from anywhere, or run everything locally. 
 
-## 🚀 Quick Start
+## 🚀 Two Ways to Run
 
+### Option 1: The Modern Way (Vercel + Local Engine)
+1. **Deploy to Vercel**: Push this repo to GitHub and connect it to Vercel.
+2. **Launch Engine**: Run `python run_local.py` on your PC.
+3. **Connect**: Open your Vercel link, go to **Settings**, and ensure the URL matches your local engine.
+
+### Option 2: Full Local (Docker)
 ```bash
-# 1. Clone and configure
+# 1. Configure
 cp .env.example .env   # Add your DEEPSEEK_API_KEY
 
-# 2. Build and run
+# 2. Run
 docker-compose up --build
 
-# 3. Open the app
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8000
+# 3. Open
+http://localhost:3000
 ```
+
+## 🧠 Universal Capabilities
+- 🔍 **Universal Search**: Now drive-agnostic! Finds "Desktop", "Downloads", or any file across all available drives (C:, D:, etc.) automatically.
+- 🤯 **Vercel-Ready**: Shared link support. Anyone with the link can use it on their own PC by running the local engine.
+- 🧠 **Document Intelligence**: Deep analysis of PDF, Excel, Word, and Images (OCR).
+- 📁 **Cloud-Private**: Your files NEVER leave your PC. The Vercel UI connects directly to your localhost.
 
 ## 🧠 Capabilities
 

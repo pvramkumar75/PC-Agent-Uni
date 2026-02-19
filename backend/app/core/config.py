@@ -1,14 +1,17 @@
-from pydantic_settings import BaseSettings
 import os
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str
-    WORKSPACE_ROOT: str = "/workspace"
-    DB_PATH: str = "/workspace/memory/procurement.db"
-    CHROMA_PATH: str = "/workspace/memory/chroma"
+    # Default to 'workspace' folder in the project root if WORKSPACE_ROOT not in ENV
+    WORKSPACE_ROOT: str = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "workspace")
     GMAIL_USER: str = ""
     GMAIL_APP_PASSWORD: str = ""
     
+    @property
+    def DB_PATH(self): return os.path.join(self.WORKSPACE_ROOT, "memory", "procurement.db")
+    @property
+    def CHROMA_PATH(self): return os.path.join(self.WORKSPACE_ROOT, "memory", "chroma")
     @property
     def INBOX_DIR(self): return os.path.join(self.WORKSPACE_ROOT, "inbox")
     @property

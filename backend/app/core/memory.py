@@ -43,7 +43,36 @@ class MemoryManager:
                 last_interaction TEXT
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS personal_knowledge (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT,
+                fact TEXT,
+                usage_count INTEGER DEFAULT 1,
+                last_used TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         self.sqlite_conn.commit()
+
+    def store_learned_fact(self, category: str, fact: str):
+        """Stores a learned pattern, user preference, or discovered file location."""
+        cursor = self.sqlite_conn.cursor()
+        # Check if fact already exists to increment usage
+        cursor.execute("SELECT id, usage_count FROM personal_knowledge WHERE fact = ?", (fact,))
+        row = cursor.fetchone()
+        if row:
+            cursor.execute("UPDATE personal_knowledge SET usage_count = usage_count + 1, last_used = CURRENT_TIMESTAMP WHERE id = ?", (row[0],))
+        else:
+            cursor.execute("INSERT INTO personal_knowledge (category, fact) VALUES (?, ?)", (category, fact))
+        self.sqlite_conn.commit()
+
+    def get_learned_facts(self, category: str = None, limit: int = 10) -> List[str]:
+        cursor = self.sqlite_conn.cursor()
+        if category:
+            cursor.execute("SELECT fact FROM personal_knowledge WHERE category = ? ORDER BY usage_count DESC, last_used DESC LIMIT ?", (category, limit))
+        else:
+            cursor.execute("SELECT fact FROM personal_knowledge ORDER BY usage_count DESC, last_used DESC LIMIT ?", (limit,))
+        return [row[0] for row in cursor.fetchall()]
 
     def store_quote(self, data: dict):
         cursor = self.sqlite_conn.cursor()
